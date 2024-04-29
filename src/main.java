@@ -135,7 +135,7 @@ public class main {
                             u.setEmail(scanner.nextLine());
                             System.out.println("Digite o novo telefone do usuário:");
                             u.setTelefone(scanner.nextLine());
-                            // Adicione mais campos conforme necessário
+
                             break;
                         }
                     }
@@ -186,13 +186,13 @@ public class main {
                     sistema.inserirConsulta(consulta);
                     System.out.println("Consulta criada.");
                     break;
-                case "6": // Nova opção para listar consultas
+                case "6":
                     System.out.println("Consultas marcadas:");
                     for (Consulta c : sistema.consultas) {
                         System.out.println("Data e hora: " + formatoDataHora.format(c.getDataHora()) + ", Paciente: " + c.getPaciente().getNome());
                     }
                     break;
-                case "7": // Nova opção para gerenciar consultas
+                case "7":
                     System.out.println("Consultas marcadas:");
                     for (int i = 0; i < sistema.consultas.size(); i++) {
                         System.out.println((i + 1) + ". " + formatoDataHora.format(sistema.consultas.get(i).getDataHora()) + ", Paciente: " + sistema.consultas.get(i).getPaciente().getNome());
