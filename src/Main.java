@@ -1,3 +1,7 @@
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -81,11 +85,35 @@ class Sistema {
     void deletarConsulta(Consulta consulta) { consultas.remove(consulta); }
 }
 
-public class main {
+public class Main {
     public static void main(String[] args) {
         Sistema sistema = new Sistema();
         Scanner scanner = new Scanner(System.in);
         SimpleDateFormat formatoDataHora = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+        // Adicionando os índices e a trigger ao banco de dados
+        try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/clinica", "postgres", "postgres");
+             Statement statement = connection.createStatement()) {
+
+            statement.executeUpdate("CREATE INDEX idx_nome ON usuarios(nome)");
+            statement.executeUpdate("CREATE INDEX idx_cpf ON usuarios(cpf)");
+
+            String triggerQuery = "CREATE TRIGGER before_insert_consultas" +
+                    " BEFORE INSERT ON consultas" +
+                    " FOR EACH ROW" +
+                    " BEGIN" +
+                    "    IF NEW.dataHora < NOW() THEN" +
+                    "        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'A data da consulta não pode ser no passado';" +
+                    "    END IF;" +
+                    " END;";
+
+            statement.executeUpdate(triggerQuery);
+
+            System.out.println("Índices e trigger criados com sucesso.");
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
 
         while (true) {
             System.out.println("Escolha uma opção:");
