@@ -1,3 +1,8 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -83,6 +88,38 @@ class Sistema {
         consulta.setPaciente(paciente);
     }
     void deletarConsulta(Consulta consulta) { consultas.remove(consulta); }
+
+    public Endereco buscarEnderecoPorCep(String cep) throws IOException {
+        String url = "http://viacep.com.br/ws/" + cep + "/json/";
+        HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
+        con.setRequestMethod("GET");
+        BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+        String inputLine;
+        StringBuilder content = new StringBuilder();
+        while ((inputLine = in.readLine()) != null) {
+            content.append(inputLine);
+        }
+        in.close();
+        con.disconnect();
+
+        String json = content.toString();
+        return parseJsonToEndereco(json);
+    }
+
+    private Endereco parseJsonToEndereco(String json) {
+        String[] parts = json.replace("{", "").replace("}", "").replace("\"", "").split(",");
+        Map<String, String> map = new HashMap<>();
+        for (String part : parts) {
+            String[] kv = part.split(":");
+            map.put(kv[0], kv[1]);
+        }
+        Endereco endereco = new Endereco();
+        endereco.setCep(map.get("cep"));
+        endereco.setEstado(map.get("uf"));
+        endereco.setCidade(map.get("localidade"));
+        endereco.setRua(map.get("logradouro"));
+        return endereco;
+    }
 }
 
 public class Main {
@@ -91,7 +128,7 @@ public class Main {
         Scanner scanner = new Scanner(System.in);
         SimpleDateFormat formatoDataHora = new SimpleDateFormat("dd/MM/yyyy HH:mm");
 
-        // Adicionando os índices e a trigger ao banco de dados
+
         try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/clinica", "postgres", "postgres");
              Statement statement = connection.createStatement()) {
 
@@ -139,18 +176,18 @@ public class Main {
                     usuario.setEmail(scanner.nextLine());
                     System.out.println("Digite o telefone do usuário:");
                     usuario.setTelefone(scanner.nextLine());
-                    System.out.println("Digite o estado do endereço do usuário:");
-                    endereco.setEstado(scanner.nextLine());
-                    System.out.println("Digite a cidade do endereço do usuário:");
-                    endereco.setCidade(scanner.nextLine());
-                    System.out.println("Digite a rua do endereço do usuário:");
-                    endereco.setRua(scanner.nextLine());
-                    System.out.println("Digite o número do endereço do usuário:");
-                    endereco.setNumero(scanner.nextLine());
                     System.out.println("Digite o CEP do endereço do usuário:");
-                    endereco.setCep(scanner.nextLine());
-                    usuario.setEndereco(endereco);
-                    sistema.inserirUsuario(usuario);
+                    String cep = scanner.nextLine();
+                    try {
+                        endereco = sistema.buscarEnderecoPorCep(cep);
+                        System.out.println("Digite o número do endereço do usuário:");
+                        endereco.setNumero(scanner.nextLine());
+                        usuario.setEndereco(endereco);
+                        sistema.inserirUsuario(usuario);
+                        System.out.println("Usuário inserido com sucesso.");
+                    } catch (IOException e) {
+                        System.out.println("Erro ao buscar endereço: " + e.getMessage());
+                    }
                     break;
                 case "2":
                     System.out.println("Digite o CPF do usuário que deseja editar:");
@@ -163,7 +200,17 @@ public class Main {
                             u.setEmail(scanner.nextLine());
                             System.out.println("Digite o novo telefone do usuário:");
                             u.setTelefone(scanner.nextLine());
-
+                            System.out.println("Digite o novo CEP do endereço do usuário:");
+                            cep = scanner.nextLine();
+                            try {
+                                Endereco novoEndereco = sistema.buscarEnderecoPorCep(cep);
+                                System.out.println("Digite o novo número do endereço do usuário:");
+                                novoEndereco.setNumero(scanner.nextLine());
+                                u.setEndereco(novoEndereco);
+                                System.out.println("Usuário editado com sucesso.");
+                            } catch (IOException e) {
+                                System.out.println("Erro ao buscar endereço: " + e.getMessage());
+                            }
                             break;
                         }
                     }
