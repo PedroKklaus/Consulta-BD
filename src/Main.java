@@ -3,10 +3,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -55,6 +52,7 @@ class Consulta {
 
     public Date getDataHora() { return dataHora; }
     public void setDataHora(Date dataHora) { this.dataHora = dataHora; }
+
     public Usuario getPaciente() { return paciente; }
     public void setPaciente(Usuario paciente) { this.paciente = paciente; }
 }
@@ -128,25 +126,62 @@ public class Main {
         Scanner scanner = new Scanner(System.in);
         SimpleDateFormat formatoDataHora = new SimpleDateFormat("dd/MM/yyyy HH:mm");
 
-
         try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/clinica", "postgres", "postgres");
              Statement statement = connection.createStatement()) {
 
             statement.executeUpdate("CREATE INDEX idx_nome ON usuarios(nome)");
             statement.executeUpdate("CREATE INDEX idx_cpf ON usuarios(cpf)");
 
-            String triggerQuery = "CREATE TRIGGER before_insert_consultas" +
-                    " BEFORE INSERT ON consultas" +
-                    " FOR EACH ROW" +
-                    " BEGIN" +
-                    "    IF NEW.dataHora < NOW() THEN" +
-                    "        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'A data da consulta não pode ser no passado';" +
-                    "    END IF;" +
-                    " END;";
+            String triggerQuery = "CREATE TRIGGER before_insert_consultas " +
+                    "BEFORE INSERT ON consultas " +
+                    "FOR EACH ROW " +
+                    "BEGIN " +
+                    "   IF NEW.dataHora < NOW() THEN " +
+                    "       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'A data da consulta não pode ser no passado'; " +
+                    "   END IF; " +
+                    "END;";
 
             statement.executeUpdate(triggerQuery);
 
-            System.out.println("Índices e trigger criados com sucesso.");
+            statement.executeUpdate("CREATE TABLE auditoria (id INT AUTO_INCREMENT PRIMARY KEY, operacao VARCHAR(50), data TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+
+            String triggerAuditoria = "CREATE TRIGGER after_insert_usuario " +
+                    "AFTER INSERT ON usuarios " +
+                    "FOR EACH ROW " +
+                    "BEGIN " +
+                    "   INSERT INTO auditoria (operacao) VALUES ('INSERT'); " +
+                    "END;";
+            statement.executeUpdate(triggerAuditoria);
+
+            triggerAuditoria = "CREATE TRIGGER after_update_usuario " +
+                    "AFTER UPDATE ON usuarios " +
+                    "FOR EACH ROW " +
+                    "BEGIN " +
+                    "   INSERT INTO auditoria (operacao) VALUES ('UPDATE'); " +
+                    "END;";
+            statement.executeUpdate(triggerAuditoria);
+
+            triggerAuditoria = "CREATE TRIGGER after_delete_usuario " +
+                    "AFTER DELETE ON usuarios " +
+                    "FOR EACH ROW " +
+                    "BEGIN " +
+                    "   INSERT INTO auditoria (operacao) VALUES ('DELETE'); " +
+                    "END;";
+            statement.executeUpdate(triggerAuditoria);
+
+            System.out.println("Índices, trigger de consulta e auditoria criados com sucesso.");
+
+            statement.executeUpdate("CREATE VIEW agenda_pacientes AS " +
+                    "SELECT c.dataHora, u.nome AS paciente, " +
+                    "CASE " +
+                    "   WHEN c.status = 'C' THEN 'Cancelada' " +
+                    "   WHEN c.status = 'C' THEN 'Confirmada' " +
+                    "   WHEN c.status = 'R' THEN 'Reagendada' " +
+                    "END AS status " +
+                    "FROM consultas c " +
+                    "INNER JOIN usuarios u ON c.paciente_id = u.id");
+
+            System.out.println("View 'agenda_pacientes' criada com sucesso.");
 
         } catch (SQLException e) {
             e.printStackTrace();
@@ -161,9 +196,10 @@ public class Main {
             System.out.println("5. Criar consulta");
             System.out.println("6. Listar consultas");
             System.out.println("7. Gerenciar consulta");
-
+            System.out.println("8. Consultar agenda de pacientes");
+        
             String opcao = scanner.nextLine();
-
+        
             switch (opcao) {
                 case "1":
                     Usuario usuario = new Usuario();
@@ -187,6 +223,8 @@ public class Main {
                         System.out.println("Usuário inserido com sucesso.");
                     } catch (IOException e) {
                         System.out.println("Erro ao buscar endereço: " + e.getMessage());
+                    } catch (SQLException e) {
+                        System.out.println("Erro ao inserir usuário: " + e.getMessage());
                     }
                     break;
                 case "2":
@@ -261,7 +299,7 @@ public class Main {
                     sistema.inserirConsulta(consulta);
                     System.out.println("Consulta criada.");
                     break;
-                case "6":
+                    case "6":
                     System.out.println("Consultas marcadas:");
                     for (Consulta c : sistema.consultas) {
                         System.out.println("Data e hora: " + formatoDataHora.format(c.getDataHora()) + ", Paciente: " + c.getPaciente().getNome());
@@ -303,6 +341,13 @@ public class Main {
                             break;
                         default:
                             System.out.println("Opção inválida.");
+                    }
+                    break;
+                    case "8":
+                    System.out.println("Consultas marcadas:");
+                    for (int i = 0; i < sistema.consultas.size(); i++) {
+                        Consulta c = sistema.consultas.get(i);
+                        System.out.println((i + 1) + ". Data e hora: " + formatoDataHora.format(c.getDataHora()) + ", Paciente: " + c.getPaciente().getNome());
                     }
                     break;
                 default:
